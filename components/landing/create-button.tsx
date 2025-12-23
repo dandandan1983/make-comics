@@ -54,22 +54,9 @@ export function CreateButton({ prompt, style, characterFiles }: CreateButtonProp
 
     try {
       const apiKey = localStorage.getItem("together_api_key")
-
       const characterUploads = await Promise.all(characterFiles.map((file) => uploadToS3(file).then(({ url }) => url)))
 
-      if (!apiKey) {
-        const comicData = {
-          prompt,
-          style,
-          characterUploads,
-        }
-        sessionStorage.setItem("firstPageData", JSON.stringify(comicData))
-        setTimeout(() => {
-          router.push("/editor")
-        }, 7500)
-        return
-      }
-
+      // Use API to create story and generate first page
       const response = await fetch("/api/generate-comic", {
         method: "POST",
         headers: {
@@ -79,41 +66,20 @@ export function CreateButton({ prompt, style, characterFiles }: CreateButtonProp
           prompt,
           apiKey,
           style,
-          characterImages: characterUploads, // Send S3 URLs to API
+          characterImages: characterUploads,
         }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-
-        if (response.status === 402 || errorData.errorType === "credit_limit") {
-          toast({
-            title: "API credits required",
-            description: "Your Together.ai API key needs credits. Please add credits or use a different API key.",
-            variant: "destructive",
-            duration: 6000,
-          })
-          setIsLoading(false)
-          return
-        }
-
-        throw new Error(errorData.error || "Failed to generate comic")
+        throw new Error(errorData.error || "Failed to create story")
       }
 
       const result = await response.json()
 
-      const comicData = {
-        prompt,
-        style,
-        imageUrl: result.imageUrl,
-        characterUploads,
-      }
+      // Redirect to the story editor using slug
+      router.push(`/editor/${result.storySlug}`)
 
-      sessionStorage.setItem("firstPageData", JSON.stringify(comicData))
-
-      setTimeout(() => {
-        router.push("/editor")
-      }, 1000)
     } catch (error) {
       console.error("Error creating comic:", error)
       toast({

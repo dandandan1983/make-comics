@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import Together from "together-ai";
+import { updatePage, createStory, createPage, getNextPageNumber } from "@/lib/db-actions";
 
 const FIXED_DIMENSIONS = { width: 864, height: 1184 };
 
@@ -91,6 +92,7 @@ const STYLE_DESCRIPTIONS: Record<string, string> = {
 export async function POST(request: NextRequest) {
   try {
     const {
+      storyId,
       prompt,
       apiKey,
       style = "noir",
@@ -99,13 +101,48 @@ export async function POST(request: NextRequest) {
       previousContext = "",
     } = await request.json();
 
-    console.log("Received character image URLs:", characterImages);
+    console.log("Received request:", { storyId, prompt: prompt?.substring(0, 50), characterImagesCount: characterImages.length });
 
     if (!prompt || !apiKey) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
+    }
+
+    let page;
+    let story;
+
+    if (storyId) {
+      // Create next page for existing story
+      console.log("Creating page for existing story:", storyId);
+      const nextPageNumber = await getNextPageNumber(storyId);
+      page = await createPage({
+        storyId,
+        pageNumber: nextPageNumber,
+        prompt,
+        characterImageUrls: characterImages,
+        style,
+      });
+      console.log("Page created:", page.id);
+    } else {
+      // Create new story and first page
+      console.log("Creating new story");
+      story = await createStory({
+        title: prompt.length > 50 ? prompt.substring(0, 50) + "..." : prompt,
+        description: undefined,
+        userId: undefined,
+      });
+      console.log("Story created:", story.id);
+
+      page = await createPage({
+        storyId: story.id,
+        pageNumber: 1,
+        prompt,
+        characterImageUrls: characterImages,
+        style,
+      });
+      console.log("First page created:", page.id);
     }
 
     const dimensions = FIXED_DIMENSIONS;
@@ -221,7 +258,25 @@ COMPOSITION:
       );
     }
 
-    return NextResponse.json({ imageUrl: response.data[0].url });
+    const imageUrl = response.data[0].url;
+
+    // Update page in database
+    try {
+      await updatePage(page.id, imageUrl);
+      console.log("Page updated with image:", page.id);
+    } catch (dbError) {
+      console.error("Error updating page in database:", dbError);
+      return NextResponse.json(
+        { error: "Failed to save generated image" },
+        { status: 500 }
+      );
+    }
+
+    const responseData = storyId
+      ? { imageUrl, pageId: page.id, pageNumber: page.pageNumber }
+      : { imageUrl, storyId: story!.id, storySlug: story!.slug, pageId: page.id, pageNumber: page.pageNumber };
+
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error("Error in generate-comic API:", error);
     return NextResponse.json(

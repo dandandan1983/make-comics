@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useParams } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { EditorToolbar } from "@/components/editor/editor-toolbar"
 import { PageSidebar } from "@/components/editor/page-sidebar"
@@ -9,64 +10,85 @@ import { ApiKeyModal } from "@/components/api-key-modal"
 import { PageInfoSheet } from "@/components/editor/page-info-sheet"
 import { GeneratePageModal } from "@/components/editor/generate-page-modal"
 
+import { useS3Upload } from "next-s3-upload"
+
 interface PageData {
-  id: number
+  id: number // pageNumber for component compatibility
   title: string
   image: string
   prompt: string
   characterUploads?: string[]
   style: string
+  dbId?: string // actual database UUID
 }
 
-const DEMO_PAGES: PageData[] = [
-  {
-    id: 1,
-    title: "Redwing: Guardian of NYC",
-    image: "/comic-book-superhero-action-scene-noir-style-dark-.jpg",
-    prompt:
-      "A superhero named Redwing protects NYC from the shadows. Tonight, a new villain threatens the city with stolen tech...",
-    style: "Noir",
-  },
-]
+interface StoryData {
+  id: string
+  title: string
+  description?: string | null
+  userId?: string | null
+}
 
-export default function EditorPage() {
-  const [pages, setPages] = useState<PageData[]>(DEMO_PAGES)
+export default function StoryEditorPage() {
+  const params = useParams()
+  const slug = params.storySlug as string
+
+  const [story, setStory] = useState<StoryData | null>(null)
+  const [pages, setPages] = useState<PageData[]>([])
   const [currentPage, setCurrentPage] = useState(0)
   const [showApiModal, setShowApiModal] = useState(false)
   const [showInfoSheet, setShowInfoSheet] = useState(false)
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [loadingPageId, setLoadingPageId] = useState<number | null>(null)
-  const [lastCharacterFiles, setLastCharacterFiles] = useState<File[]>([])
-  const [lastCharacterUploads, setLastCharacterUploads] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [existingCharacterImages, setExistingCharacterImages] = useState<string[]>([])
+  const { uploadToS3 } = useS3Upload()
   const { toast } = useToast()
 
+  // Load story and pages from API
   useEffect(() => {
-    const firstPageData = sessionStorage.getItem("firstPageData")
-    if (firstPageData) {
-      const data = JSON.parse(firstPageData)
-      setPages([
-        {
-          ...pages[0],
-          prompt: data.prompt,
-          style: data.style,
-          image: data.imageUrl || pages[0].image,
-          characterUploads: data.characterUploads,
-        },
-      ])
+    const loadStoryData = async () => {
+      try {
+        const response = await fetch(`/api/stories/${slug}`)
+        if (!response.ok) {
+          throw new Error("Story not found")
+        }
 
-      if (data.characterUploads && data.characterUploads.length > 0) {
-        setLastCharacterUploads(data.characterUploads)
+        const result = await response.json()
+        const { story: storyData, pages: pagesData } = result
+
+        setStory(storyData)
+        setPages(pagesData.map((page: any) => ({
+          id: page.pageNumber,
+          title: storyData.title,
+          image: page.generatedImageUrl || "",
+          prompt: page.prompt,
+          characterUploads: page.characterImageUrls,
+          style: "noir",
+          dbId: page.id,
+        })))
+
+        // Load existing character images for reuse
+        const uniqueImages = [...new Set(pagesData.flatMap((page: any) => page.characterImageUrls || []))]
+        setExistingCharacterImages(uniqueImages as string[])
+
+      } catch (error) {
+        console.error("Error loading story:", error)
+        toast({
+          title: "Error loading story",
+          description: "Failed to load the story data.",
+          variant: "destructive",
+          duration: 4000,
+        })
+      } finally {
+        setIsLoading(false)
       }
-
-      sessionStorage.removeItem("firstPageData")
     }
 
-    toast({
-      title: "Comic generated successfully",
-      description: "Your comic page is ready to view",
-      duration: 4000,
-    })
-  }, [toast])
+    if (slug) {
+      loadStoryData()
+    }
+  }, [slug, toast])
 
   const handleAddPage = () => {
     const storedKey = localStorage.getItem("together_api_key")
@@ -109,33 +131,40 @@ export default function EditorPage() {
     prompt: string
     style: string
     characterFiles?: File[]
+    characterUrls?: string[] // For reusing existing characters
     isContinuation?: boolean
   }) => {
+    if (!story) return
+
     setShowGenerateModal(false)
 
-    const newPageId = pages.length + 1
-
-    let characterUploads: string[] = []
-    if (data.characterFiles && data.characterFiles.length > 0) {
-      characterUploads = await Promise.all(data.characterFiles.map((file) => fileToBase64(file)))
-      setLastCharacterUploads(characterUploads)
-    }
-
-    const newPage: PageData = {
-      id: newPageId,
-      title: pages[0].title,
-      image: "",
-      prompt: data.prompt,
-      characterUploads: characterUploads.length > 0 ? characterUploads : undefined,
-      style: data.style,
-    }
-
-    setPages([...pages, newPage])
-    setCurrentPage(pages.length)
-    setLoadingPageId(newPageId)
-    setLastCharacterFiles(data.characterFiles || [])
-
     try {
+      // Handle new character uploads
+      let characterUploads: string[] = data.characterUrls || []
+
+      if (data.characterFiles && data.characterFiles.length > 0) {
+        const newUploads = await Promise.all(
+          data.characterFiles.map((file) => uploadToS3(file).then(({ url }) => url))
+        )
+        characterUploads = [...characterUploads, ...newUploads]
+      }
+
+      // Add loading page to UI
+      const nextPageNumber = pages.length + 1
+      const pageData: PageData = {
+        id: nextPageNumber,
+        title: story.title,
+        image: "",
+        prompt: data.prompt,
+        characterUploads,
+        style: data.style,
+      }
+
+      setPages([...pages, pageData])
+      setCurrentPage(pages.length)
+      setLoadingPageId(nextPageNumber)
+
+      // Generate the comic image
       const apiKey = localStorage.getItem("together_api_key")
       if (!apiKey) {
         throw new Error("API key not found")
@@ -149,65 +178,84 @@ export default function EditorPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          storyId: story?.id,
           prompt: data.prompt,
-          apiKey: apiKey,
+          apiKey,
           style: data.style,
+          characterImages: characterUploads,
           isContinuation: data.isContinuation,
           previousContext: data.isContinuation ? previousPage?.prompt : undefined,
         }),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to generate image")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to generate image")
       }
 
       const result = await response.json()
 
+      // Update page with generated image
       setPages((prevPages) =>
         prevPages.map((page) =>
-          page.id === newPageId
+          page.id === nextPageNumber
             ? {
                 ...page,
                 image: result.imageUrl,
+                dbId: result.pageId,
               }
             : page,
         ),
       )
 
+      // Update existing character images for future reuse
+      if (characterUploads.length > 0) {
+        const updatedImages = [...new Set([...existingCharacterImages, ...characterUploads])]
+        setExistingCharacterImages(updatedImages)
+      }
+
       toast({
         title: "Page generated successfully",
-        description: `Page ${newPageId} is ready`,
+        description: `Page ${nextPageNumber} is ready`,
         duration: 4000,
       })
     } catch (error) {
       console.error("Error generating page:", error)
       toast({
         title: "Generation failed",
-        description: "Failed to generate comic page. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to generate comic page. Please try again.",
         variant: "destructive",
         duration: 4000,
       })
 
-      setPages((prevPages) => prevPages.filter((page) => page.id !== newPageId))
+      // Remove failed page from state
+      setPages((prevPages) => prevPages.filter((page) => page.id !== loadingPageId))
       setCurrentPage(Math.max(0, pages.length - 1))
     } finally {
       setLoadingPageId(null)
     }
   }
 
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(file)
-    })
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <div className="text-white">Loading story...</div>
+      </div>
+    )
+  }
+
+  if (!story) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <div className="text-white">Story not found</div>
+      </div>
+    )
   }
 
   return (
     <div className="h-screen flex flex-col bg-background">
       <EditorToolbar
-        title={pages[0]?.title || "Untitled Comic"}
+        title={story.title}
         onContinueStory={handleContinueStory}
         onInfoClick={() => setShowInfoSheet(true)}
       />
@@ -230,9 +278,10 @@ export default function EditorPage() {
         onClose={() => setShowGenerateModal(false)}
         onGenerate={handleGeneratePage}
         pageNumber={pages.length + 1}
-        previousCharacters={lastCharacterFiles}
+        previousCharacters={[]} // Will be updated with character reuse
         previousPagePrompt={pages[pages.length - 1]?.prompt}
         previousPageStyle={pages[pages.length - 1]?.style?.toLowerCase()}
+        existingCharacterImages={existingCharacterImages}
       />
       <PageInfoSheet isOpen={showInfoSheet} onClose={() => setShowInfoSheet(false)} page={pages[currentPage]} />
     </div>
