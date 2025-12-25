@@ -7,6 +7,7 @@ import {
   createPage,
   getNextPageNumber,
 } from "@/lib/db-actions";
+import { freeTierRateLimit } from "@/lib/rate-limit";
 
 const NEW_MODEL = false;
 const IMAGE_MODEL = NEW_MODEL
@@ -122,13 +123,45 @@ export async function POST(request: NextRequest) {
       previousContext = "",
     } = await request.json();
 
-    console.log("Received request:", { storyId, prompt: prompt?.substring(0, 50), characterImagesCount: characterImages.length, userId });
+    console.log("Received request:", { storyId, prompt: prompt?.substring(0, 50), characterImagesCount: characterImages.length, userId, hasApiKey: !!apiKey });
 
-    if (!prompt || !apiKey) {
+    if (!prompt) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
+    }
+
+    // Determine which API key to use
+    let finalApiKey = apiKey;
+    const isUsingFreeTier = !apiKey;
+
+    if (isUsingFreeTier) {
+      // Using free tier - apply rate limiting
+      const { success, reset } = await freeTierRateLimit.limit(userId);
+
+      if (!success) {
+        const resetDate = new Date(reset);
+        const timeUntilReset = Math.ceil((reset - Date.now()) / (1000 * 60 * 60 * 24)); // days
+
+        return NextResponse.json(
+          {
+            error: `Free tier limit reached. You can generate 1 comic per week. Try again in ${timeUntilReset} day(s), or provide your own API key for unlimited access.`,
+            resetDate: resetDate.toISOString(),
+            isRateLimited: true,
+          },
+          { status: 429 }
+        );
+      }
+
+      // Use default API key for free tier
+      finalApiKey = process.env.TOGETHER_API_KEY_DEFAULT;
+      if (!finalApiKey) {
+        return NextResponse.json(
+          { error: "Server configuration error - default API key not available" },
+          { status: 500 }
+        );
+      }
     }
 
     let page;
@@ -235,9 +268,9 @@ COMPOSITION:
 
     const fullPrompt = `${systemPrompt}\n\nSTORY:\n${prompt}`;
 
-    console.log("Generating comic with prompt length:", fullPrompt.length);
+    console.log("Generating comic with prompt length:", fullPrompt.length, "using tier:", isUsingFreeTier ? "free" : "paid");
 
-    const client = new Together({ apiKey });
+    const client = new Together({ apiKey: finalApiKey });
 
     let response;
     try {

@@ -113,7 +113,7 @@ export function ApiKeyModal({ isOpen, onClose, onSubmit }: ApiKeyModalProps) {
 
         <div className="mt-4 p-3 glass-panel rounded-lg">
           <p className="text-xs text-muted-foreground text-center">
-            Your API key is stored locally and never sent to our servers.
+            Your API key is stored locally and never stored on our servers.
           </p>
         </div>
       </DialogContent>

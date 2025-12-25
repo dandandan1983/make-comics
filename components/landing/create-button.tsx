@@ -1,44 +1,66 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { ArrowRight, Loader2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { useToast } from "@/hooks/use-toast"
-import { useS3Upload } from "next-s3-upload"
-import { useAuth, SignInButton } from "@clerk/nextjs"
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { useS3Upload } from "next-s3-upload";
+import { useAuth, SignInButton } from "@clerk/nextjs";
 
 interface CreateButtonProps {
-  prompt: string
-  style: string
-  characterFiles: File[]
+  prompt: string;
+  style: string;
+  characterFiles: File[];
 }
 
-export function CreateButton({ prompt, style, characterFiles }: CreateButtonProps) {
-  const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
-  const [loadingStep, setLoadingStep] = useState(0)
-  const { toast } = useToast()
-  const { uploadToS3 } = useS3Upload()
-  const { isSignedIn } = useAuth()
+export function CreateButton({
+  prompt,
+  style,
+  characterFiles,
+}: CreateButtonProps) {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
+  const { toast } = useToast();
+  const { uploadToS3 } = useS3Upload();
+  const { isSignedIn } = useAuth();
+  const [hasApiKey, setHasApiKey] = useState(false);
+
+  // Check if user has their own API key set
+  useEffect(() => {
+    const checkApiKey = () => {
+      const apiKey = localStorage.getItem("together_api_key");
+      setHasApiKey(!!apiKey);
+    };
+
+    checkApiKey();
+    // Listen for storage changes
+    window.addEventListener("storage", checkApiKey);
+    return () => window.removeEventListener("storage", checkApiKey);
+  }, []);
 
   useEffect(() => {
-    if (!isLoading) return
+    if (!isLoading) return;
 
-    const steps = ["Enhancing prompt...", "Generating scenes...", "Creating your comic..."]
-    let currentStep = 0
+    const steps = [
+      "Enhancing prompt...",
+      "Generating scenes...",
+      "Creating your comic...",
+    ];
+    let currentStep = 0;
 
     const interval = setInterval(() => {
-      currentStep += 1
+      currentStep += 1;
       if (currentStep < steps.length) {
-        setLoadingStep(currentStep)
+        setLoadingStep(currentStep);
       } else {
-        clearInterval(interval)
+        clearInterval(interval);
       }
-    }, 2500)
+    }, 2500);
 
-    return () => clearInterval(interval)
-  }, [isLoading])
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   const handleCreate = async () => {
     if (!prompt.trim()) {
@@ -47,16 +69,18 @@ export function CreateButton({ prompt, style, characterFiles }: CreateButtonProp
         description: "Please enter a prompt to generate your comic",
         variant: "destructive",
         duration: 3000,
-      })
-      return
+      });
+      return;
     }
 
-    setIsLoading(true)
-    setLoadingStep(0)
+    setIsLoading(true);
+    setLoadingStep(0);
 
     try {
-      const apiKey = localStorage.getItem("together_api_key")
-      const characterUploads = await Promise.all(characterFiles.map((file) => uploadToS3(file).then(({ url }) => url)))
+      const apiKey = localStorage.getItem("together_api_key");
+      const characterUploads = await Promise.all(
+        characterFiles.map((file) => uploadToS3(file).then(({ url }) => url))
+      );
 
       // Use API to create story and generate first page
       const response = await fetch("/api/generate-comic", {
@@ -70,54 +94,72 @@ export function CreateButton({ prompt, style, characterFiles }: CreateButtonProp
           style,
           characterImages: characterUploads,
         }),
-      })
+      });
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to create story")
+        const errorData = await response.json();
+        if (response.status === 429 && errorData.isRateLimited) {
+          throw new Error(errorData.error);
+        }
+        throw new Error(errorData.error || "Failed to create story");
       }
 
-      const result = await response.json()
+      const result = await response.json();
 
       // Redirect to the story editor using slug
-      router.push(`/editor/${result.storySlug}`)
-
+      router.push(`/editor/${result.storySlug}`);
     } catch (error) {
-      console.error("Error creating comic:", error)
+      console.error("Error creating comic:", error);
       toast({
         title: "Creation failed",
-        description: error instanceof Error ? error.message : "Failed to create comic. Please try again.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to create comic. Please try again.",
         variant: "destructive",
         duration: 4000,
-      })
-      setIsLoading(false)
+      });
+      setIsLoading(false);
     }
-  }
+  };
 
-
-
-  const loadingSteps = ["Enhancing prompt...", "Generating scenes...", "Creating your comic..."]
+  const loadingSteps = [
+    "Enhancing prompt...",
+    "Generating scenes...",
+    "Creating your comic...",
+  ];
 
   return (
     <div className="pt-2">
       {isSignedIn ? (
-        <Button
-          onClick={handleCreate}
-          disabled={isLoading || !prompt.trim()}
-          className="w-full sm:w-auto sm:min-w-40 bg-white hover:bg-neutral-200 text-black px-8 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-3 tracking-tight"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm font-medium tracking-tight">{loadingSteps[loadingStep]}</span>
-            </>
-          ) : (
-            <>
-              Generate
-              <ArrowRight className="w-4 h-4" />
-            </>
-          )}
-        </Button>
+        <div className="flex items-center justify-between gap-3 w-full">
+          <Button
+            onClick={handleCreate}
+            disabled={isLoading || !prompt.trim()}
+            className="bg-white hover:bg-neutral-200 text-black px-8 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-3 tracking-tight"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm font-medium tracking-tight">
+                  {loadingSteps[loadingStep]}
+                </span>
+              </>
+            ) : (
+              <>
+                Generate
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </Button>
+          <div className="text-xs text-muted-foreground whitespace-nowrap">
+            {hasApiKey ? (
+              <>Using your API key (~$0.01 per comic)</>
+            ) : (
+              <>1 credit weekly</>
+            )}
+          </div>
+        </div>
       ) : (
         <SignInButton mode="modal">
           <Button className="w-full sm:w-auto sm:min-w-40 bg-white hover:bg-neutral-200 text-black px-8 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-3 tracking-tight">
@@ -127,5 +169,5 @@ export function CreateButton({ prompt, style, characterFiles }: CreateButtonProp
         </SignInButton>
       )}
     </div>
-  )
+  );
 }

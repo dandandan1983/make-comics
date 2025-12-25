@@ -15,6 +15,20 @@
       "when": 1766492848044,
       "tag": "0001_windy_ezekiel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1766674906873,
+      "tag": "0002_romantic_blob",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1766674926877,
+      "tag": "0003_harsh_molecule_man",
+      "breakpoints": true
     }
   ]
 }
