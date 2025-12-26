@@ -168,7 +168,7 @@ export function ComicCreationForm({
       const result = await response.json();
 
       // Redirect to the story editor using slug
-      router.push(`/editor/${result.storySlug}`);
+      router.push(`/story/${result.storySlug}`);
     } catch (error) {
       console.error("Error creating comic:", error);
       toast({

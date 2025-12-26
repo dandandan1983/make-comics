@@ -132,7 +132,7 @@ export default function StoriesPage() {
                    {stories.map((story, index) => (
                      <button
                        key={story.id}
-                       onClick={() => router.push(`/editor/${story.slug}`)}
+                        onClick={() => router.push(`/story/${story.slug}`)}
                         className={`opacity-0 animate-fade-in-up group relative glass-panel p-3 rounded-lg hover:shadow-indigo/20 hover:shadow-2xl transition-all duration-500 hover:scale-[1.05] hover:-translate-y-2 border border-border/50 hover:border-indigo/30 hover:bg-white/[0.02] backdrop-blur-sm focus:outline-none`}
                        style={{ animationDelay: `${200 + index * 100}ms` }}
                      >
