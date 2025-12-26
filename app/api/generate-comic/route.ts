@@ -209,15 +209,19 @@ Only return the JSON, no other text.`;
           }
 
           const parsed = JSON.parse(jsonMatch[0]);
-          const rawTitle = parsed.title?.trim() || (prompt.length > 50 ? prompt.substring(0, 50) + "..." : prompt);
+          const rawTitle =
+            parsed.title?.trim() ||
+            (prompt.length > 50 ? prompt.substring(0, 50) + "..." : prompt);
           const rawDescription = parsed.description?.trim();
-          
+
           // Enforce character limits
-          const title = rawTitle.length > 60 ? rawTitle.substring(0, 57) + "..." : rawTitle;
-          const description = rawDescription && rawDescription.length > 200 
-            ? rawDescription.substring(0, 197) + "..." 
-            : rawDescription;
-          
+          const title =
+            rawTitle.length > 60 ? rawTitle.substring(0, 57) + "..." : rawTitle;
+          const description =
+            rawDescription && rawDescription.length > 200
+              ? rawDescription.substring(0, 197) + "..."
+              : rawDescription;
+
           return {
             title,
             description: description || undefined,
@@ -309,7 +313,11 @@ Only return the JSON, no other text.`;
           description: generatedDescription,
         });
         // Update story object for response
-        story = { ...story, title: generatedTitle, description: generatedDescription };
+        story = {
+          ...story,
+          title: generatedTitle,
+          description: generatedDescription,
+        };
       } catch (dbError) {
         console.error("Error updating story title/description:", dbError);
         // Continue even if update fails

@@ -113,10 +113,22 @@ export function StoryEditorClient() {
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts if user is typing in an input field
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
       if (e.key === "ArrowRight") {
         setCurrentPage((prev) => (prev < pages.length - 1 ? prev + 1 : prev));
       } else if (e.key === "ArrowLeft") {
         setCurrentPage((prev) => (prev > 0 ? prev - 1 : prev));
+      } else if (e.key === "i" || e.key === "I") {
+        setShowInfoSheet(true);
       }
     };
 
