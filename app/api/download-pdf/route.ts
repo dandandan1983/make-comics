@@ -51,8 +51,14 @@ export async function GET(request: NextRequest) {
       pdf.addImage(imgData, 'JPEG', 10, 10, 190, 277); // A4 portrait size minus margins
 
       // Add "Created by Make Comics" at the bottom
-      pdf.setFontSize(8);
-      pdf.text('Created by Make Comics', 105, 290, { align: 'center' });
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(12);
+      const text = 'Created by Make Comics';
+      const textX = 105;
+      const textY = 290;
+      pdf.text(text, textX, textY, { align: 'center' });
+      const dimensions = pdf.getTextDimensions(text);
+      pdf.link(textX - dimensions.w / 2, textY - dimensions.h / 2, dimensions.w, dimensions.h, { url: 'https://make-comics.vercel.app/' });
     }
 
     const pdfBuffer = Buffer.from(pdf.output('arraybuffer'));

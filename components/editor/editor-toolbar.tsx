@@ -68,7 +68,7 @@ export function EditorToolbar({
            <span>Share</span>
          </Button>
 
-         {isOwner && onDownloadPDF && (
+         {onDownloadPDF && (
            <Button
              variant="ghost"
              className="hover:bg-secondary text-muted-foreground hover:text-white gap-1.5 sm:gap-2 text-xs h-8 sm:h-9 px-2 sm:px-3"
