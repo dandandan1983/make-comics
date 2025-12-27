@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, Share, Info, Loader2, Trash2 } from "lucide-react";
+import { RefreshCw, Share, Info, Loader2, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 
@@ -81,18 +81,18 @@ export function ComicCanvas({
            </div>
          </div>
 
-         {/* Action buttons below the page image */}
-        <div className="hidden md:flex items-center justify-center gap-2 mt-4">
-          {onInfoClick && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hover:bg-secondary text-muted-foreground hover:text-white h-9 w-9"
-              onClick={onInfoClick}
-            >
-              <Info className="w-4 h-4" />
-            </Button>
-          )}
+          {/* Action buttons below the page image */}
+         <div className="hidden md:flex items-center justify-center gap-2 mt-4">
+           {onInfoClick && (
+             <Button
+               variant="ghost"
+               className="hover:bg-secondary text-muted-foreground hover:text-white gap-2 text-xs h-9 px-3"
+               onClick={onInfoClick}
+             >
+               <Info className="w-4 h-4" />
+               <span>Info (i)</span>
+             </Button>
+           )}
 
           {isOwner && (
             <Button
@@ -123,22 +123,40 @@ export function ComicCanvas({
         </div>
 
         <div className="flex flex-col items-center gap-3 mt-4">
-          <div className="text-xs text-muted-foreground md:hidden">
-            Page {pageIndex + 1} of {totalPages}
-          </div>
+           <div className="flex items-center gap-2 text-xs text-muted-foreground md:hidden">
+             <Button
+               variant="ghost"
+               size="icon"
+               className="h-6 w-6 hover:bg-secondary text-muted-foreground hover:text-white"
+               onClick={onPrevPage}
+               disabled={pageIndex === 0}
+             >
+               <ChevronLeft className="w-3 h-3" />
+             </Button>
+             <span>Page {pageIndex + 1} of {totalPages}</span>
+             <Button
+               variant="ghost"
+               size="icon"
+               className="h-6 w-6 hover:bg-secondary text-muted-foreground hover:text-white"
+               onClick={onNextPage}
+               disabled={pageIndex === totalPages - 1}
+             >
+               <ChevronRight className="w-3 h-3" />
+             </Button>
+           </div>
 
-          {/* Mobile action buttons */}
-          <div className="flex items-center gap-2 md:hidden">
-            {onInfoClick && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hover:bg-secondary text-muted-foreground hover:text-white h-9 w-9"
-                onClick={onInfoClick}
-              >
-                <Info className="w-4 h-4" />
-              </Button>
-            )}
+           {/* Mobile action buttons */}
+           <div className="flex items-center gap-2 md:hidden">
+             {onInfoClick && (
+               <Button
+                 variant="ghost"
+                 className="hover:bg-secondary text-muted-foreground hover:text-white gap-2 text-xs h-9 px-3"
+                 onClick={onInfoClick}
+               >
+                 <Info className="w-4 h-4" />
+                 <span>Info (i)</span>
+               </Button>
+             )}
 
             {isOwner && (
               <Button
