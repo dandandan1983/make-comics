@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, RefreshCw, Share, Plus, Info } from "lucide-react";
+import { ArrowLeft, RefreshCw, Share, Plus, Info, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -8,12 +8,16 @@ import { useToast } from "@/hooks/use-toast";
 interface EditorToolbarProps {
   title: string;
   onContinueStory?: () => void;
+  onDownloadPDF?: () => void;
+  isGeneratingPDF?: boolean;
   isOwner?: boolean;
 }
 
 export function EditorToolbar({
   title,
   onContinueStory,
+  onDownloadPDF,
+  isGeneratingPDF = false,
   isOwner = true,
 }: EditorToolbarProps) {
   const router = useRouter();
@@ -37,32 +41,44 @@ export function EditorToolbar({
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-        <Button
-          variant="ghost"
-          className="hover:bg-secondary text-muted-foreground hover:text-white gap-1.5 sm:gap-2 text-xs h-8 sm:h-9 px-2 sm:px-3 hidden md:flex"
-          onClick={async () => {
-            const url = window.location.href;
-            try {
-              await navigator.clipboard.writeText(url);
-              toast({
-                title: "Link copied!",
-                description: "Story URL has been copied to your clipboard.",
-                duration: 2000,
-              });
-            } catch (err) {
-              console.error("Failed to copy URL:", err);
-              toast({
-                title: "Failed to copy",
-                description: "Could not copy the URL to clipboard.",
-                variant: "destructive",
-                duration: 3000,
-              });
-            }
-          }}
-        >
-          <Share className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          <span>Share</span>
-        </Button>
+         <Button
+           variant="ghost"
+           className="hover:bg-secondary text-muted-foreground hover:text-white gap-1.5 sm:gap-2 text-xs h-8 sm:h-9 px-2 sm:px-3 hidden md:flex"
+           onClick={async () => {
+             const url = window.location.href;
+             try {
+               await navigator.clipboard.writeText(url);
+               toast({
+                 title: "Link copied!",
+                 description: "Story URL has been copied to your clipboard.",
+                 duration: 2000,
+               });
+             } catch (err) {
+               console.error("Failed to copy URL:", err);
+               toast({
+                 title: "Failed to copy",
+                 description: "Could not copy the URL to clipboard.",
+                 variant: "destructive",
+                 duration: 3000,
+               });
+             }
+           }}
+         >
+           <Share className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+           <span>Share</span>
+         </Button>
+
+         {isOwner && onDownloadPDF && (
+           <Button
+             variant="ghost"
+             className="hover:bg-secondary text-muted-foreground hover:text-white gap-1.5 sm:gap-2 text-xs h-8 sm:h-9 px-2 sm:px-3"
+             onClick={onDownloadPDF}
+             disabled={isGeneratingPDF}
+           >
+             <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+             <span>{isGeneratingPDF ? 'Generating...' : 'Download PDF'}</span>
+           </Button>
+         )}
 
          {isOwner && onContinueStory && (
            <Button

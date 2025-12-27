@@ -60,6 +60,7 @@ export function StoryEditorClient() {
   const [existingCharacterImages, setExistingCharacterImages] = useState<
     string[]
   >([]);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const { toast } = useToast();
   const [apiKey, setApiKey] = useApiKey();
 
@@ -225,6 +226,47 @@ export function StoryEditorClient() {
     setShowApiModal(true);
   };
 
+  const downloadPDF = async () => {
+    if (!story || pages.length === 0) return;
+
+    setIsGeneratingPDF(true);
+
+    try {
+      const response = await fetch(`/api/download-pdf?storySlug=${story.slug}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate PDF");
+      }
+
+      // Create blob from response and trigger download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${story.title}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "PDF downloaded",
+        description: "Your comic has been downloaded as a PDF.",
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: "Failed to generate PDF",
+        description: "An error occurred while generating the PDF.",
+        variant: "destructive",
+        duration: 4000,
+      });
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   const handleDeletePage = (pageIndex: number) => {
     setPageToDelete(pageIndex);
     setShowDeleteDialog(true);
@@ -372,6 +414,8 @@ export function StoryEditorClient() {
       <EditorToolbar
         title={story.title}
         onContinueStory={handleAddPage}
+        onDownloadPDF={downloadPDF}
+        isGeneratingPDF={isGeneratingPDF}
         isOwner={isOwner}
       />
 
