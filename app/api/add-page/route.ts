@@ -10,10 +10,12 @@ import {
   getNextPageNumber,
   getStoryWithPagesBySlug,
   getLastPageImage,
+  deletePage,
 } from "@/lib/db-actions";
 import { freeTierRateLimit } from "@/lib/rate-limit";
 import { uploadImageToS3 } from "@/lib/s3-upload";
 import { buildComicPrompt } from "@/lib/prompt";
+import { isContentPolicyViolation, getContentPolicyErrorMessage } from "@/lib/utils";
 
 const NEW_MODEL = false;
 
@@ -63,25 +65,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    // Apply rate limiting for free tier
-    const hasApiKey = request.headers.get("x-api-key");
-    if (!hasApiKey) {
-      const { success, reset } = await freeTierRateLimit.limit(userId);
-      if (!success) {
-        const resetDate = new Date(reset);
-        const timeUntilReset = Math.ceil(
-          (reset - Date.now()) / (1000 * 60 * 60 * 24)
-        );
-        return NextResponse.json(
-          {
-            error: `Free tier limit reached. You can generate 1 comic per week. Try again in ${timeUntilReset} day(s), or provide your own API key.`,
-            resetDate: resetDate.toISOString(),
-            isRateLimited: true,
-          },
-          { status: 429 }
-        );
-      }
-    }
+
 
     let page;
     let pageNumber;
@@ -172,6 +156,30 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.error("Together AI API error:", error);
 
+      // Clean up DB records if generation failed due to content policy
+      try {
+        if (error instanceof Error && error.message && error.message.includes("NO_IMAGE")) {
+          if (isRedraw) {
+            // For redraw, we don't delete the page, just don't update it
+          } else {
+            // For new page, delete the page that was created
+            await deletePage(page.id);
+          }
+        }
+      } catch (cleanupError) {
+        console.error("Error cleaning up DB on image generation failure:", cleanupError);
+      }
+
+      if (error instanceof Error && error.message && isContentPolicyViolation(error.message)) {
+        return NextResponse.json(
+          {
+            error: getContentPolicyErrorMessage(),
+            errorType: "content_policy",
+          },
+          { status: 400 }
+        );
+      }
+
       if (error instanceof Error && "status" in error) {
         const status = (error as any).status;
         if (status === 402) {
@@ -214,6 +222,17 @@ export async function POST(request: NextRequest) {
     const s3ImageUrl = await uploadImageToS3(imageUrl, s3Key);
 
     await updatePage(page.id, s3ImageUrl);
+
+    // Apply rate limiting for free tier after successful generation
+    const hasApiKey = request.headers.get("x-api-key");
+    if (!hasApiKey) {
+      try {
+        await freeTierRateLimit.limit(userId);
+      } catch (rateLimitError) {
+        console.error("Error applying rate limit after successful generation:", rateLimitError);
+        // Don't fail the request if rate limiting fails, just log it
+      }
+    }
 
     return NextResponse.json({
       imageUrl: s3ImageUrl,

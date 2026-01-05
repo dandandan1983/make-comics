@@ -146,3 +146,7 @@ export async function getNextPageNumber(storyId: string): Promise<number> {
 export async function deletePage(pageId: string): Promise<void> {
   await db.delete(pages).where(eq(pages.id, pageId));
 }
+
+export async function deleteStory(storyId: string): Promise<void> {
+  await db.delete(stories).where(eq(stories.id, storyId));
+}

@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
 import { validateFileForUpload, generateFilePreview } from "@/lib/file-utils";
 import { useS3Upload } from "next-s3-upload";
+import { isContentPolicyViolation } from "@/lib/utils";
 
 interface CharacterItem {
   url: string;
@@ -268,16 +269,22 @@ export function GeneratePageModal({
       });
     } catch (error) {
       console.error("Error generating page:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to generate page. Please try again.";
+      let title = "Generation failed";
+      if (isContentPolicyViolation(errorMessage)) {
+        title = "Content policy violation";
+      }
       toast({
-        title: "Generation failed",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to generate page. Please try again.",
+        title,
+        description: errorMessage,
         variant: "destructive",
         duration: 4000,
       });
       setIsGenerating(false);
+      throw error; // Re-throw so the parent handler knows generation failed
     }
   };
 

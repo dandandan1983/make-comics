@@ -10,6 +10,7 @@ import { useAuth, SignInButton } from "@clerk/nextjs";
 import { COMIC_STYLES } from "@/lib/constants";
 import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
 import { useApiKey } from "@/hooks/use-api-key";
+import { isContentPolicyViolation } from "@/lib/utils";
 
 interface ComicCreationFormProps {
   prompt: string;
@@ -171,12 +172,17 @@ export function ComicCreationForm({
       router.push(`/story/${result.storySlug}`);
     } catch (error) {
       console.error("Error creating comic:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to create comic. Please try again.";
+      let title = "Creation failed";
+      if (isContentPolicyViolation(errorMessage)) {
+        title = "Content policy violation";
+      }
       toast({
-        title: "Creation failed",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to create comic. Please try again.",
+        title,
+        description: errorMessage,
         variant: "destructive",
         duration: 4000,
       });

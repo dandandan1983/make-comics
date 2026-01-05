@@ -10,11 +10,14 @@ import {
   getStoryById,
   getLastPageImage,
   getStoryCharacterImages,
+  deletePage,
+  deleteStory,
 } from "@/lib/db-actions";
 import { freeTierRateLimit } from "@/lib/rate-limit";
 import { COMIC_STYLES } from "@/lib/constants";
 import { uploadImageToS3 } from "@/lib/s3-upload";
 import { buildComicPrompt } from "@/lib/prompt";
+import { isContentPolicyViolation, getContentPolicyErrorMessage } from "@/lib/utils";
 
 const NEW_MODEL = false;
 
@@ -61,25 +64,6 @@ export async function POST(request: NextRequest) {
     const isUsingFreeTier = !apiKey;
 
     if (isUsingFreeTier) {
-      // Using free tier - apply rate limiting
-      const { success, reset } = await freeTierRateLimit.limit(userId);
-
-      if (!success) {
-        const resetDate = new Date(reset);
-        const timeUntilReset = Math.ceil(
-          (reset - Date.now()) / (1000 * 60 * 60 * 24)
-        ); // days
-
-        return NextResponse.json(
-          {
-            error: `Free tier limit reached. You can generate 1 comic per week. Try again in ${timeUntilReset} day(s), or provide your own API key for unlimited access.`,
-            resetDate: resetDate.toISOString(),
-            isRateLimited: true,
-          },
-          { status: 429 }
-        );
-      }
-
       // Use default API key for free tier
       finalApiKey = process.env.TOGETHER_API_KEY_DEFAULT;
       if (!finalApiKey) {
@@ -91,6 +75,8 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
+
 
     let page;
     let story;
@@ -251,6 +237,29 @@ Only return the JSON, no other text.`;
     } catch (error) {
       console.error("Together AI API error:", error);
 
+      // Clean up DB records if generation failed
+      try {
+        if (!storyId) {
+          // New story failed
+          await deleteStory(story!.id);
+        } else {
+          // Continuation failed
+          await deletePage(page.id);
+        }
+      } catch (cleanupError) {
+        console.error("Error cleaning up DB on image generation failure:", cleanupError);
+      }
+
+      if (error instanceof Error && error.message && isContentPolicyViolation(error.message)) {
+        return NextResponse.json(
+          {
+            error: getContentPolicyErrorMessage(),
+            errorType: "content_policy",
+          },
+          { status: 400 }
+        );
+      }
+
       if (error instanceof Error && "status" in error) {
         const status = (error as any).status;
         if (status === 402) {
@@ -332,6 +341,16 @@ Only return the JSON, no other text.`;
         { error: "Failed to save generated image" },
         { status: 500 }
       );
+    }
+
+    // Apply rate limiting for free tier after successful generation
+    if (isUsingFreeTier) {
+      try {
+        await freeTierRateLimit.limit(userId);
+      } catch (rateLimitError) {
+        console.error("Error applying rate limit after successful generation:", rateLimitError);
+        // Don't fail the request if rate limiting fails, just log it
+      }
     }
 
     const responseData = storyId
