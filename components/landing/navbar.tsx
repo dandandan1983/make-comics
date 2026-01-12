@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Github, Key, BookOpen, User, Plus } from "lucide-react";
 import Link from "next/link";
@@ -10,6 +10,7 @@ import { useApiKey } from "@/hooks/use-api-key";
 
 export function Navbar() {
   const [showApiModal, setShowApiModal] = useState(false);
+  const [stars, setStars] = useState<string>("-");
 
   const { isLoaded } = useAuth();
   const pathname = usePathname();
@@ -19,6 +20,32 @@ export function Navbar() {
     setApiKey(key);
     setShowApiModal(false);
   };
+
+  useEffect(() => {
+    async function fetchStars() {
+      try {
+        const res = await fetch(
+          "https://api.github.com/repos/Nutlope/aicommits",
+          {
+            headers: {
+              Accept: "application/vnd.github+json",
+              "User-Agent": "make-comics-app",
+            },
+          }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        setStars(
+          typeof data.stargazers_count === "number"
+            ? data.stargazers_count.toLocaleString()
+            : "-"
+        );
+      } catch {
+        setStars("-");
+      }
+    }
+    fetchStars();
+  }, []);
 
   const isOnStoriesPage = pathname === "/stories";
 
@@ -55,17 +82,17 @@ export function Navbar() {
             </span>
           </button>
 
-          <Link
-            href="https://github.com/nutlope/make-comics"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 glass-panel glass-panel-hover transition-all text-xs rounded-md"
-          >
-            <Github className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span className="text-muted-foreground text-xs sm:text-sm hidden sm:inline">
-              0
-            </span>
-          </Link>
+           <Link
+             href="https://github.com/Nutlope/make-comics"
+             target="_blank"
+             rel="noopener noreferrer"
+             className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 glass-panel glass-panel-hover transition-all text-xs rounded-md"
+           >
+             <Github className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+             <span className="text-muted-foreground text-xs sm:text-sm hidden sm:inline">
+               {stars}
+             </span>
+           </Link>
 
           <SignedOut>
             <SignInButton mode="modal">
