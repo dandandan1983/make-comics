@@ -9,7 +9,7 @@
 
 ## How AI Generates Comics
 
-We use **Google Flash Image 2.5** to generate comic pages and **Qwen3 80B** to generate story titles and narratives. 
+We use [**Google Flash Image 2.5**](https://www.together.ai/models/gemini-flash-image-2-5) to generate comic pages and [**Qwen3 80B**](https://www.together.ai/models/qwen3-next-80b-a3b-instruct) to generate story titles and narratives. 
 The AI references previous pages for visual coherence and uses uploaded character images to maintain consistency across panels.
 
 ## Tech stack
