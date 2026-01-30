@@ -64,12 +64,14 @@ export function GeneratePageModal({
   const [showPreview, setShowPreview] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasInitializedRef = useRef(false);
   const { toast } = useToast();
   const { uploadToS3 } = useS3Upload();
 
   // Reset form and initialize characters when modal opens
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !hasInitializedRef.current) {
+      hasInitializedRef.current = true;
       setPrompt(isRedrawMode ? existingPrompt : "");
       setShowPreview(null);
       setIsGenerating(false);
@@ -128,6 +130,13 @@ export function GeneratePageModal({
     lastPageCharacters,
     previousPageCharacters,
   ]);
+
+  // Reset initialization flag when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      hasInitializedRef.current = false;
+    }
+  }, [isOpen]);
 
   // Keyboard shortcut for form submission (disabled during generation)
   useKeyboardShortcut(
