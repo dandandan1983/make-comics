@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useS3Upload } from "next-s3-upload";
 import { useAuth, SignInButton, useClerk } from "@clerk/nextjs";
-import { COMIC_STYLES } from "@/lib/constants";
+import { COMIC_STYLES, getEstimatedSeconds } from "@/lib/constants";
 import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
 import { useApiKey, useModelMode, type ModelMode } from "@/hooks/use-api-key";
 import { isContentPolicyViolation } from "@/lib/utils";
@@ -39,6 +39,7 @@ export function ComicCreationForm({
 }: ComicCreationFormProps) {
   const router = useRouter();
   const [loadingStep, setLoadingStep] = useState(0);
+  const [countdown, setCountdown] = useState(0);
   const { toast } = useToast();
   const { uploadToS3 } = useS3Upload();
   const { isSignedIn, isLoaded } = useAuth();
@@ -67,6 +68,41 @@ export function ComicCreationForm({
       setShowStyleDropdown(false);
     }
   }, [isLoading]);
+
+  // Prevent page refresh while generating
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isLoading) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isLoading]);
+
+  // Countdown timer for generation
+  useEffect(() => {
+    if (!isLoading) {
+      setCountdown(0);
+      return;
+    }
+
+    setCountdown(getEstimatedSeconds(modelMode));
+
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isLoading, modelMode]);
 
   useEffect(() => {
     // Auto-focus the textarea when component mounts
@@ -509,6 +545,9 @@ export function ComicCreationForm({
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span className="text-sm font-medium tracking-tight">
                     {loadingSteps[loadingStep]}
+                    {countdown > 0 && (
+                      <span className="ml-1 text-black/60">({countdown}s)</span>
+                    )}
                   </span>
                 </>
               ) : (

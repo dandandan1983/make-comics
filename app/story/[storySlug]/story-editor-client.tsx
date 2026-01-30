@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useApiKey, useModelMode } from "@/hooks/use-api-key";
 import { useAuth } from "@clerk/nextjs";
+import { getEstimatedSeconds } from "@/lib/constants";
 import { EditorToolbar } from "@/components/editor/editor-toolbar";
 import { PageSidebar } from "@/components/editor/page-sidebar";
 import { ComicCanvas } from "@/components/editor/comic-canvas";
@@ -64,6 +65,7 @@ export function StoryEditorClient() {
     string[]
   >([]);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [pageCountdown, setPageCountdown] = useState(0);
   const { toast } = useToast();
   const [apiKey, setApiKey] = useApiKey();
   const [modelMode, setModelMode] = useModelMode();
@@ -167,6 +169,40 @@ export function StoryEditorClient() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [pages.length, apiKey]);
 
+  // Prevent page refresh while generating
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (loadingPageId !== null) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [loadingPageId]);
+
+  // Countdown timer for page generation
+  useEffect(() => {
+    if (loadingPageId === null) {
+      setPageCountdown(0);
+      return;
+    }
+
+    setPageCountdown(getEstimatedSeconds(modelMode));
+
+    const interval = setInterval(() => {
+      setPageCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [loadingPageId, modelMode]);
 
   const handleAddPage = async () => {
     if (!isLoaded || !isSignedIn) {
@@ -489,6 +525,7 @@ export function StoryEditorClient() {
           onPageSelect={setCurrentPage}
           onAddPage={handleAddPage}
           loadingPageId={loadingPageId}
+          loadingCountdown={pageCountdown}
           onApiKeyClick={handleApiKeyClick}
           isOwner={isOwner}
         />
@@ -497,6 +534,7 @@ export function StoryEditorClient() {
           pageIndex={currentPage}
           totalPages={pages.length}
           isLoading={loadingPageId === currentPage}
+          loadingCountdown={pageCountdown}
           isOwner={isOwner}
           onInfoClick={() => setShowInfoSheet(true)}
           onRedrawClick={handleRedrawPage}

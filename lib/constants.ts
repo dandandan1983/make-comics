@@ -27,3 +27,11 @@ export const PRO_MODEL = "google/gemini-3-pro-image";
 
 export const FAST_DIMENSIONS = { width: 864, height: 1184 };
 export const PRO_DIMENSIONS = { width: 896, height: 1200 };
+
+// Estimated generation times (in seconds)
+export const FAST_MODEL_ESTIMATED_SECONDS = 15;
+export const PRO_MODEL_ESTIMATED_SECONDS = 30;
+
+export function getEstimatedSeconds(modelMode: "fast" | "pro"): number {
+  return modelMode === "pro" ? PRO_MODEL_ESTIMATED_SECONDS : FAST_MODEL_ESTIMATED_SECONDS;
+}
