@@ -122,8 +122,8 @@ export function ComicCanvas({
           )}
         </div>
 
-        <div className="flex flex-col items-center gap-3 mt-4">
-           <div className="flex items-center gap-2 text-xs text-muted-foreground md:hidden">
+         <div className="flex flex-col items-center gap-3 mt-4">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
              <Button
                variant="ghost"
                size="icon"
